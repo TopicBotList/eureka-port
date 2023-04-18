@@ -9,3 +9,4 @@ Set of common primitives for all Infinity Development services.
 - dovewing: Our custom user fetching and caching library
 - genconfig: Common configuration generation library
 - uapi: Defines a unified API handling code with auth and timeouts and caching builtin
+- snippets: Common snippets for our services
