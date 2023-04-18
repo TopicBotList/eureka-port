@@ -8,3 +8,4 @@ Set of common primitives for all Infinity Development services.
 - doclib: Common documentation library
 - dovewing: Our custom user fetching and caching library
 - genconfig: Common configuration generation library
+- uapi: Common unified API system. Handles the core logic for API's
