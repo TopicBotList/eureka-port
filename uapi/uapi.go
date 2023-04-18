@@ -25,7 +25,7 @@ type UAPIState struct {
 	Logger              *zap.SugaredLogger
 	Authorize           func(r Route, req *http.Request) (AuthData, HttpResponse, bool)
 	AuthTypeMap         map[string]string // E.g. bot => Bot, user => User etc.
-	RouteDataMiddleware func(rd *RouteData, req *http.Request) *RouteData
+	RouteDataMiddleware func(rd RouteData, req *http.Request) (RouteData, error)
 
 	// Used in cache algo
 	Redis *redis.Client
@@ -252,16 +252,28 @@ func (r Route) Route(ro Router) {
 				return
 			}
 
-			rd := &RouteData{
+			rd := RouteData{
 				Context: ctx,
 				Auth:    authData,
 			}
 
 			if state.RouteDataMiddleware != nil {
-				rd = state.RouteDataMiddleware(rd, req)
+				var err error
+				rd, err = state.RouteDataMiddleware(rd, req)
+
+				if err != nil {
+					resp <- HttpResponse{
+						Status: http.StatusInternalServerError,
+						Json: ApiError{
+							Message: err.Error(),
+							Error:   false,
+						},
+					}
+					return
+				}
 			}
 
-			resp <- r.Handler(*rd, req)
+			resp <- r.Handler(rd, req)
 		}()
 
 		respond(ctx, w, resp)
