@@ -21,7 +21,7 @@ type State struct {
 	Context        context.Context
 	Pool           *pgxpool.Pool
 	Redis          *redis.Client
-	UpdateCache func(u *DiscordUser)
+	UpdateCache func(u *DiscordUser) error
 }
 
 var state *State
@@ -73,8 +73,7 @@ func GetDiscordUser(ctx context.Context, id string) (userObj *DiscordUser, err e
 			return nil, fmt.Errorf("failed to update internal user cache: %s", err)
 		}
 
-		// Needed for arcadia
-		if u.Bot && state.UpdateCache {
+		if u.Bot && state.UpdateCache != nil {
 			err := state.UpdateCache(u)
 			if err != nil {
 				return nil, fmt.Errorf("failed to update bot queue name: %s", err)
