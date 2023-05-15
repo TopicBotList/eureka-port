@@ -21,6 +21,7 @@ type State struct {
 	Context        context.Context
 	Pool           *pgxpool.Pool
 	Redis          *redis.Client
+	Popplio bool
 }
 
 var state *State
@@ -73,7 +74,7 @@ func GetDiscordUser(ctx context.Context, id string) (userObj *DiscordUser, err e
 		}
 
 		// Needed for arcadia
-		if u.Bot {
+		if u.Bot && state.Popplio {
 			_, err = state.Pool.Exec(state.Context, "UPDATE bots SET queue_name = $1, queue_avatar = $2 WHERE bot_id = $3", u.Username, u.Avatar, u.ID)
 
 			if err != nil {
