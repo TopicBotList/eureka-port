@@ -14,7 +14,7 @@ import (
 
 type DiscordState struct {
 	Session     *discordgo.Session
-	UpdateCache func(u *PlatformUser[DiscordPlatformSpecific]) error
+	UpdateCache func(u *PlatformUser) error
 }
 
 type DiscordPlatformSpecific struct {
@@ -22,14 +22,14 @@ type DiscordPlatformSpecific struct {
 	Guild    string `json:"in_guild" description:"The guild (ID) the user is in if in a mutual server"`
 }
 
-func GetDiscordUser(ctx context.Context, id string) (userObj *PlatformUser[DiscordPlatformSpecific], err error) {
+func GetDiscordUser(ctx context.Context, id string) (userObj *PlatformUser, err error) {
 	if state.Discord == nil {
 		return nil, errors.New("discord not enabled")
 	}
 
 	const userExpiryTime = 8 * time.Hour
 
-	cachedReturn := func(u *PlatformUser[DiscordPlatformSpecific]) (*PlatformUser[DiscordPlatformSpecific], error) {
+	cachedReturn := func(u *PlatformUser) (*PlatformUser, error) {
 		if u == nil {
 			return nil, errors.New("user not found")
 		}
@@ -97,15 +97,16 @@ func GetDiscordUser(ctx context.Context, id string) (userObj *PlatformUser[Disco
 			}
 		}
 
-		return cachedReturn(&PlatformUser[DiscordPlatformSpecific]{
+		return cachedReturn(&PlatformUser{
 			ID:          id,
 			Username:    member.User.Username,
 			Avatar:      member.User.AvatarURL(""),
 			DisplayName: member.User.GlobalName,
 			Bot:         member.User.Bot,
-			PlatformSpecific: DiscordPlatformSpecific{
-				Nickname: member.Nick,
-				Guild:    state.PreferredGuild,
+			ExtraData: map[string]any{
+				"nickname":        member.Nick,
+				"mutual_guild":    state.PreferredGuild,
+				"preferred_guild": true,
 			},
 			Status: platformStatus(p.Status),
 		})
@@ -128,15 +129,16 @@ func GetDiscordUser(ctx context.Context, id string) (userObj *PlatformUser[Disco
 				}
 			}
 
-			return cachedReturn(&PlatformUser[DiscordPlatformSpecific]{
+			return cachedReturn(&PlatformUser{
 				ID:          id,
 				Username:    member.User.Username,
 				Avatar:      member.User.AvatarURL(""),
 				DisplayName: member.User.GlobalName,
 				Bot:         member.User.Bot,
-				PlatformSpecific: DiscordPlatformSpecific{
-					Nickname: member.Nick,
-					Guild:    guild.ID,
+				ExtraData: map[string]any{
+					"nickname":        member.Nick,
+					"mutual_guild":    guild.ID,
+					"preferred_guild": false,
 				},
 				Status: platformStatus(p.Status),
 			})
@@ -149,7 +151,7 @@ func GetDiscordUser(ctx context.Context, id string) (userObj *PlatformUser[Disco
 	if err == nil {
 		// Try to unmarshal
 
-		var user PlatformUser[DiscordPlatformSpecific]
+		var user PlatformUser
 
 		err = json.Unmarshal([]byte(userBytes), &user)
 
@@ -183,7 +185,7 @@ func GetDiscordUser(ctx context.Context, id string) (userObj *PlatformUser[Disco
 					state.Logger.Error("Failed to update expired user cache", zap.Error(err))
 				}
 
-				cachedReturn(&PlatformUser[DiscordPlatformSpecific]{
+				cachedReturn(&PlatformUser{
 					ID:          id,
 					Username:    user.Username,
 					Avatar:      user.AvatarURL(""),
@@ -206,7 +208,7 @@ func GetDiscordUser(ctx context.Context, id string) (userObj *PlatformUser[Disco
 			return nil, err
 		}
 
-		return cachedReturn(&PlatformUser[DiscordPlatformSpecific]{
+		return cachedReturn(&PlatformUser{
 			ID:          id,
 			Username:    username,
 			Avatar:      avatar,
@@ -223,7 +225,7 @@ func GetDiscordUser(ctx context.Context, id string) (userObj *PlatformUser[Disco
 		return nil, fmt.Errorf("failed to update expired user cache: %s", err)
 	}
 
-	return cachedReturn(&PlatformUser[DiscordPlatformSpecific]{
+	return cachedReturn(&PlatformUser{
 		ID:          id,
 		Username:    user.Username,
 		Avatar:      user.AvatarURL(""),
