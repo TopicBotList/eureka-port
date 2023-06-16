@@ -17,11 +17,6 @@ type DiscordState struct {
 	UpdateCache func(u *PlatformUser) error
 }
 
-type DiscordPlatformSpecific struct {
-	Nickname string `json:"nickname" description:"The users nickname if in a mutual server"`
-	Guild    string `json:"in_guild" description:"The guild (ID) the user is in if in a mutual server"`
-}
-
 func GetDiscordUser(ctx context.Context, id string) (userObj *PlatformUser, err error) {
 	if state.Discord == nil {
 		return nil, errors.New("discord not enabled")
