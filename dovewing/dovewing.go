@@ -21,7 +21,7 @@ type State struct {
 	Context        context.Context
 	Pool           *pgxpool.Pool
 	Redis          *redis.Client
-	UpdateCache func(u *DiscordUser) error
+	UpdateCache    func(u *DiscordUser) error
 }
 
 var state *State
@@ -29,7 +29,7 @@ var state *State
 func SetState(st *State) {
 	// Create the cache tables in db
 	_, err := st.Pool.Exec(st.Context, `
-		CREATE TABLE IF NOT EXISTS internal_user_cache (
+		CREATE TABLE IF NOT EXISTS internal_user_cache__discord (
 			id TEXT PRIMARY KEY,
 			username TEXT NOT NULL,
 			discriminator TEXT NOT NULL,
@@ -66,8 +66,8 @@ func GetDiscordUser(ctx context.Context, id string) (userObj *DiscordUser, err e
 			return nil, errors.New("user not found")
 		}
 
-		// Update internal_user_cache
-		_, err := state.Pool.Exec(state.Context, "INSERT INTO internal_user_cache (id, username, discriminator, avatar, bot) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (id) DO UPDATE SET username = $2, discriminator = $3, avatar = $4, bot = $5, last_updated = NOW()", u.ID, u.Username, u.Discriminator, u.Avatar, u.Bot)
+		// Update internal_user_cache__discord
+		_, err := state.Pool.Exec(state.Context, "INSERT INTO internal_user_cache__discord (id, username, discriminator, avatar, bot) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (id) DO UPDATE SET username = $2, discriminator = $3, avatar = $4, bot = $5, last_updated = NOW()", u.ID, u.Username, u.Discriminator, u.Avatar, u.Bot)
 
 		if err != nil {
 			return nil, fmt.Errorf("failed to update internal user cache: %s", err)
@@ -83,7 +83,7 @@ func GetDiscordUser(ctx context.Context, id string) (userObj *DiscordUser, err e
 		bytes, err := json.Marshal(u)
 
 		if err == nil {
-			state.Redis.Set(state.Context, "uobj:"+id, bytes, userExpiryTime)
+			state.Redis.Set(state.Context, "uobj__discord:"+id, bytes, userExpiryTime)
 		}
 
 		return u, nil
@@ -155,7 +155,7 @@ func GetDiscordUser(ctx context.Context, id string) (userObj *DiscordUser, err e
 	}
 
 	// Check if in redis cache
-	userBytes, err := state.Redis.Get(ctx, "uobj:"+id).Result()
+	userBytes, err := state.Redis.Get(ctx, "uobj__discord:"+id).Result()
 
 	if err == nil {
 		// Try to unmarshal
@@ -169,16 +169,16 @@ func GetDiscordUser(ctx context.Context, id string) (userObj *DiscordUser, err e
 		}
 	}
 
-	// Check if in internal_user_cache, this allows fetches of users not in cache to be done in the background
+	// Check if in internal_user_cache__discord, this allows fetches of users not in cache to be done in the background
 	var count int64
 
-	err = state.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM internal_user_cache WHERE id = $1", id).Scan(&count)
+	err = state.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM internal_user_cache__discord WHERE id = $1", id).Scan(&count)
 
 	if err == nil && count > 0 {
 		// Check if expired
 		var lastUpdated time.Time
 
-		err = state.Pool.QueryRow(ctx, "SELECT last_updated FROM internal_user_cache WHERE id = $1", id).Scan(&lastUpdated)
+		err = state.Pool.QueryRow(ctx, "SELECT last_updated FROM internal_user_cache__discord WHERE id = $1", id).Scan(&lastUpdated)
 
 		if err != nil {
 			return nil, err
@@ -211,7 +211,7 @@ func GetDiscordUser(ctx context.Context, id string) (userObj *DiscordUser, err e
 		var bot bool
 		var createdAt time.Time
 
-		err = state.Pool.QueryRow(ctx, "SELECT username, discriminator, avatar, bot, created_at FROM internal_user_cache WHERE id = $1", id).Scan(&username, &discriminator, &avatar, &bot, &createdAt)
+		err = state.Pool.QueryRow(ctx, "SELECT username, discriminator, avatar, bot, created_at FROM internal_user_cache__discord WHERE id = $1", id).Scan(&username, &discriminator, &avatar, &bot, &createdAt)
 
 		if err != nil {
 			return nil, err
