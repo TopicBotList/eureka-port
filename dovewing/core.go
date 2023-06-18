@@ -129,14 +129,14 @@ func GetUser(ctx context.Context, id string, platform Platform) (*PlatformUser, 
 	}
 
 	// First, check platform specific cache
-	u, err := platform.PlatformSpecificCache(ctx, id)
+	uCached, err := platform.PlatformSpecificCache(ctx, id)
 
 	if err != nil {
 		return nil, fmt.Errorf("platformSpecificCache failed: %s", err)
 	}
 
-	if u != nil {
-		return cachedReturn(u)
+	if uCached != nil {
+		return cachedReturn(uCached)
 	}
 
 	// Check if in redis cache
@@ -149,12 +149,9 @@ func GetUser(ctx context.Context, id string, platform Platform) (*PlatformUser, 
 		err = json.Unmarshal([]byte(userBytes), &user)
 
 		if err == nil {
-			fmt.Println(user)
-			if len(u.ExtraData) == 0 {
-				u.ExtraData = make(map[string]interface{})
+			user.ExtraData = map[string]any{
+				"cache": true,
 			}
-
-			u.ExtraData["__cached"] = true
 			return &user, nil
 		}
 	}
