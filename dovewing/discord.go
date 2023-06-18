@@ -24,7 +24,7 @@ func discordPlatformStatus(status discordgo.Status) PlatformStatus {
 type DiscordState struct {
 	Session        *discordgo.Session // Discord session
 	PreferredGuild string             // Which guilds should be checked first for users, good if theres one guild with the majority of users
-	Initted        bool               // Whether the platform has been initted or not
+	initialized    bool               // Whether the platform has been initted or not
 }
 
 func (d *DiscordState) platformName() string {
@@ -36,12 +36,12 @@ func (d *DiscordState) init() error {
 		return errors.New("discord not enabled")
 	}
 
-	d.Initted = true
+	d.initialized = true
 	return nil
 }
 
 func (d *DiscordState) initted() bool {
-	return d.Initted
+	return d.initialized
 }
 
 func (d *DiscordState) validateId(id string) (string, error) {
