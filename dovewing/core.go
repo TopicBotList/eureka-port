@@ -149,6 +149,7 @@ func GetUser(ctx context.Context, id string, platform Platform) (*PlatformUser, 
 		err = json.Unmarshal([]byte(userBytes), &user)
 
 		if err == nil {
+			fmt.Println(user)
 			if len(u.ExtraData) == 0 {
 				u.ExtraData = make(map[string]interface{})
 			}
