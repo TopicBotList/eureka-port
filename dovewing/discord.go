@@ -27,11 +27,11 @@ type DiscordState struct {
 	initialized    bool               // Whether the platform has been initted or not
 }
 
-func (d *DiscordState) platformName() string {
+func (d *DiscordState) PlatformName() string {
 	return "discord"
 }
 
-func (d *DiscordState) init() error {
+func (d *DiscordState) Init() error {
 	if d.Session == nil {
 		return errors.New("discord not enabled")
 	}
@@ -40,11 +40,11 @@ func (d *DiscordState) init() error {
 	return nil
 }
 
-func (d *DiscordState) initted() bool {
+func (d *DiscordState) Initted() bool {
 	return d.initialized
 }
 
-func (d *DiscordState) validateId(id string) (string, error) {
+func (d *DiscordState) ValidateId(id string) (string, error) {
 	// Before wasting time searching state, ensure the ID is actually a valid snowflake
 	if _, err := strconv.ParseUint(id, 10, 64); err != nil {
 		return "", err
@@ -58,7 +58,7 @@ func (d *DiscordState) validateId(id string) (string, error) {
 	return id, nil
 }
 
-func (d *DiscordState) platformSpecificCache(ctx context.Context, id string) (*PlatformUser, error) {
+func (d *DiscordState) PlatformSpecificCache(ctx context.Context, id string) (*PlatformUser, error) {
 	// First try for main server
 	if d.PreferredGuild != "" {
 		member, err := d.Session.State.Member(d.PreferredGuild, id)
@@ -127,7 +127,7 @@ func (d *DiscordState) platformSpecificCache(ctx context.Context, id string) (*P
 	return nil, nil
 }
 
-func (d *DiscordState) getUser(ctx context.Context, id string) (*PlatformUser, error) {
+func (d *DiscordState) GetUser(ctx context.Context, id string) (*PlatformUser, error) {
 	// Get from discord
 	user, err := d.Session.User(id)
 

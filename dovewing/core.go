@@ -13,11 +13,12 @@ import (
 )
 
 type State struct {
-	Logger   *zap.SugaredLogger
-	Context  context.Context
-	Pool     *pgxpool.Pool
-	Redis    *redis.Client
-	OnUpdate func(u *PlatformUser) error
+	Logger         *zap.SugaredLogger
+	Context        context.Context
+	Pool           *pgxpool.Pool
+	Redis          *redis.Client
+	OnUpdate       func(u *PlatformUser) error
+	UserExpiryTime time.Duration
 
 	// internal
 	initted bool
@@ -33,26 +34,26 @@ func SetGlobalState(st *State) {
 
 type Platform interface {
 	// initializes a platform, most of the time, needs no implementation
-	init() error
+	Init() error
 	// returns whether or not the platform is initialized, init() must set this to true if called
-	initted() bool
+	Initted() bool
 	// returns the name of the platform, used for cache table names
-	platformName() string
+	PlatformName() string
 	// validate the id, if feasible
-	validateId(id string) (string, error)
+	ValidateId(id string) (string, error)
 	// try and find the user in the platform's cache, should only hit cache
 	//
 	// if user not found, return nil, nil (error should be nil and user obj should be nil)
 	//
 	// note that returning a error here will cause the user to not be fetched from the platform
-	platformSpecificCache(ctx context.Context, id string) (*PlatformUser, error)
+	PlatformSpecificCache(ctx context.Context, id string) (*PlatformUser, error)
 	// fetch a user from the platform, at this point, assume that cache has been checked
-	getUser(ctx context.Context, id string) (*PlatformUser, error)
+	GetUser(ctx context.Context, id string) (*PlatformUser, error)
 }
 
 // Common platform init code
 func InitPlatform(platform Platform) error {
-	var tableName = "internal_user_cache__" + platform.platformName()
+	var tableName = "internal_user_cache__" + platform.PlatformName()
 
 	_, err := state.Pool.Exec(state.Context, `
 		CREATE TABLE IF NOT EXISTS `+tableName+` (
@@ -70,7 +71,7 @@ func InitPlatform(platform Platform) error {
 		return err
 	}
 
-	return platform.init()
+	return platform.Init()
 }
 
 func GetUser(ctx context.Context, id string, platform Platform) (*PlatformUser, error) {
@@ -78,7 +79,7 @@ func GetUser(ctx context.Context, id string, platform Platform) (*PlatformUser, 
 		return nil, errors.New("state not initialized")
 	}
 
-	if !platform.initted() {
+	if !platform.Initted() {
 		// call InitPlatform first
 		err := InitPlatform(platform)
 
@@ -86,15 +87,13 @@ func GetUser(ctx context.Context, id string, platform Platform) (*PlatformUser, 
 			return nil, errors.New("failed to init platform: " + err.Error())
 		}
 
-		if !platform.initted() {
+		if !platform.Initted() {
 			return nil, errors.New("platform init() did not set initted() to true")
 		}
 	}
 
-	var platformName = platform.platformName()
+	var platformName = platform.PlatformName()
 	var tableName = "internal_user_cache__" + platformName
-
-	const userExpiryTime = 16 * time.Hour
 
 	// Common cacher, applicable to all use cases
 	cachedReturn := func(u *PlatformUser) (*PlatformUser, error) {
@@ -123,14 +122,14 @@ func GetUser(ctx context.Context, id string, platform Platform) (*PlatformUser, 
 		bytes, err := json.Marshal(u)
 
 		if err == nil {
-			state.Redis.Set(state.Context, "uobj__"+platformName+":"+id, bytes, userExpiryTime)
+			state.Redis.Set(state.Context, "uobj__"+platformName+":"+id, bytes, state.UserExpiryTime)
 		}
 
 		return u, nil
 	}
 
 	// First, check platform specific cache
-	u, err := platform.platformSpecificCache(ctx, id)
+	u, err := platform.PlatformSpecificCache(ctx, id)
 
 	if err != nil {
 		return nil, fmt.Errorf("platformSpecificCache failed: %s", err)
@@ -150,6 +149,7 @@ func GetUser(ctx context.Context, id string, platform Platform) (*PlatformUser, 
 		err = json.Unmarshal([]byte(userBytes), &user)
 
 		if err == nil {
+			u.ExtraData["__cached"] = true
 			return &user, nil
 		}
 	}
@@ -174,13 +174,13 @@ func GetUser(ctx context.Context, id string, platform Platform) (*PlatformUser, 
 			return nil, err
 		}
 
-		if time.Since(lastUpdated) > userExpiryTime {
+		if time.Since(lastUpdated) > state.UserExpiryTime {
 			// Update in background, since this is in cache, users won't mind this but will mind timeouts
 			go func() {
 				// Get from platform
 				state.Logger.Info("Updating expired user cache", zap.String("id", id), zap.String("platform", platformName))
 
-				user, err := platform.getUser(ctx, id)
+				user, err := platform.GetUser(ctx, id)
 
 				if err != nil {
 					state.Logger.Error("Failed to update expired user cache", zap.Error(err))
@@ -220,7 +220,7 @@ func GetUser(ctx context.Context, id string, platform Platform) (*PlatformUser, 
 	}
 
 	// Get from platform
-	user, err := platform.getUser(ctx, id)
+	user, err := platform.GetUser(ctx, id)
 
 	if err != nil {
 		return nil, errors.New("failed to get user from platform: " + err.Error())
