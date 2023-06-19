@@ -22,9 +22,23 @@ func discordPlatformStatus(status discordgo.Status) PlatformStatus {
 }
 
 type DiscordState struct {
+	config      *DiscordStateConfig // Config for the discord state
+	initialized bool                // Whether the platform has been initted or not
+}
+
+type DiscordStateConfig struct {
 	Session        *discordgo.Session // Discord session
 	PreferredGuild string             // Which guilds should be checked first for users, good if theres one guild with the majority of users
-	initialized    bool               // Whether the platform has been initted or not
+}
+
+func (d *DiscordState) New(c *DiscordStateConfig) (*DiscordState, error) {
+	if d.config.Session == nil {
+		return nil, errors.New("discord not enabled")
+	}
+
+	return &DiscordState{
+		config: c,
+	}, nil
 }
 
 func (d *DiscordState) PlatformName() string {
@@ -32,10 +46,6 @@ func (d *DiscordState) PlatformName() string {
 }
 
 func (d *DiscordState) Init() error {
-	if d.Session == nil {
-		return errors.New("discord not enabled")
-	}
-
 	d.initialized = true
 	return nil
 }
@@ -60,11 +70,11 @@ func (d *DiscordState) ValidateId(id string) (string, error) {
 
 func (d *DiscordState) PlatformSpecificCache(ctx context.Context, id string) (*PlatformUser, error) {
 	// First try for main server
-	if d.PreferredGuild != "" {
-		member, err := d.Session.State.Member(d.PreferredGuild, id)
+	if d.config.PreferredGuild != "" {
+		member, err := d.config.Session.State.Member(d.config.PreferredGuild, id)
 
 		if err == nil {
-			p, pErr := d.Session.State.Presence(d.PreferredGuild, id)
+			p, pErr := d.config.Session.State.Presence(d.config.PreferredGuild, id)
 
 			if pErr != nil {
 				p = &discordgo.Presence{
@@ -81,7 +91,7 @@ func (d *DiscordState) PlatformSpecificCache(ctx context.Context, id string) (*P
 				Bot:         member.User.Bot,
 				ExtraData: map[string]any{
 					"nickname":        member.Nick,
-					"mutual_guild":    d.PreferredGuild,
+					"mutual_guild":    d.config.PreferredGuild,
 					"preferred_guild": true,
 					"public_flags":    member.User.PublicFlags,
 				},
@@ -90,15 +100,15 @@ func (d *DiscordState) PlatformSpecificCache(ctx context.Context, id string) (*P
 		}
 	}
 
-	for _, guild := range d.Session.State.Guilds {
-		if guild.ID == d.PreferredGuild {
+	for _, guild := range d.config.Session.State.Guilds {
+		if guild.ID == d.config.PreferredGuild {
 			continue // Already checked
 		}
 
-		member, err := d.Session.State.Member(guild.ID, id)
+		member, err := d.config.Session.State.Member(guild.ID, id)
 
 		if err == nil {
-			p, pErr := d.Session.State.Presence(guild.ID, id)
+			p, pErr := d.config.Session.State.Presence(guild.ID, id)
 
 			if pErr != nil {
 				p = &discordgo.Presence{
@@ -129,7 +139,7 @@ func (d *DiscordState) PlatformSpecificCache(ctx context.Context, id string) (*P
 
 func (d *DiscordState) GetUser(ctx context.Context, id string) (*PlatformUser, error) {
 	// Get from discord
-	user, err := d.Session.User(id)
+	user, err := d.config.Session.User(id)
 
 	if err != nil {
 		return nil, err
