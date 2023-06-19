@@ -150,7 +150,7 @@ func GetUser(ctx context.Context, id string, platform Platform) (*PlatformUser, 
 
 		if err == nil {
 			user.ExtraData = map[string]any{
-				"cache": true,
+				"cache": "redis",
 			}
 			return &user, nil
 		}
@@ -218,6 +218,9 @@ func GetUser(ctx context.Context, id string, platform Platform) (*PlatformUser, 
 			DisplayName: displayName,
 			Bot:         bot,
 			Status:      PlatformStatusOffline,
+			ExtraData: map[string]any{
+				"cache": "pg",
+			},
 		})
 	}
 
