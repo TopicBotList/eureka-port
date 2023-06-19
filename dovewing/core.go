@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
+	"golang.org/x/exp/slices"
 )
 
 type BaseState struct {
@@ -67,6 +68,7 @@ func InitPlatform(platform Platform) error {
 	return platform.Init()
 }
 
+// Fetches a user based on the platform
 func GetUser(ctx context.Context, id string, platform Platform) (*PlatformUser, error) {
 	state := platform.GetState()
 
@@ -223,4 +225,90 @@ func GetUser(ctx context.Context, id string, platform Platform) (*PlatformUser, 
 	}
 
 	return cachedReturn(user)
+}
+
+type ClearFrom string
+
+const (
+	ClearFromInternalUserCache ClearFrom = "iuc"
+	ClearFromRedis             ClearFrom = "redis"
+)
+
+// ClearUserInfo contains information on a clear operation
+type ClearUserInfo struct {
+	// The user that was cleared
+	ClearedFrom []ClearFrom
+}
+
+type ClearUserReq struct {
+	// Where to clear from
+	//
+	// iuc -> internal user cache (postgres)
+	//
+	// Redis -> redis cache
+	//
+	//
+	// If not specified, will clear from all
+	ClearFrom []ClearFrom
+}
+
+// Clears a user of a platform
+func ClearUser(ctx context.Context, id string, platform Platform, req ClearUserReq) (*ClearUserInfo, error) {
+	state := platform.GetState()
+
+	if !platform.Initted() {
+		// call InitPlatform first
+		err := InitPlatform(platform)
+
+		if err != nil {
+			return nil, errors.New("failed to init platform: " + err.Error())
+		}
+
+		if !platform.Initted() {
+			return nil, errors.New("platform init() did not set initted() to true")
+		}
+	}
+
+	var platformName = platform.PlatformName()
+	var tableName = "internal_user_cache__" + platformName
+
+	var clearedFrom []ClearFrom
+
+	// Check iuc
+	if len(req.ClearFrom) == 0 || slices.Contains(req.ClearFrom, ClearFromInternalUserCache) {
+		var count int64
+
+		err := state.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM "+tableName+" WHERE id = $1", id).Scan(&count)
+
+		if err != nil {
+			return nil, err
+		}
+
+		if count > 0 {
+			// Delete from iuc
+			_, err = state.Pool.Exec(ctx, "DELETE FROM "+tableName+" WHERE id = $1", id)
+
+			if err != nil {
+				return nil, err
+			}
+
+			clearedFrom = append(clearedFrom, ClearFromInternalUserCache)
+		}
+	}
+
+	// Check redis
+	if len(req.ClearFrom) == 0 || slices.Contains(req.ClearFrom, ClearFromRedis) {
+		// Delete from redis
+		_, err := state.Redis.Del(ctx, "uobj__"+platformName+":"+id).Result()
+
+		if err != nil {
+			return nil, err
+		}
+
+		clearedFrom = append(clearedFrom, ClearFromRedis) // TODO: make this a constant
+	}
+
+	return &ClearUserInfo{
+		ClearedFrom: clearedFrom,
+	}, nil
 }
