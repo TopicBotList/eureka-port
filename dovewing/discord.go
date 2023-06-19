@@ -29,11 +29,16 @@ type DiscordState struct {
 type DiscordStateConfig struct {
 	Session        *discordgo.Session // Discord session
 	PreferredGuild string             // Which guilds should be checked first for users, good if theres one guild with the majority of users
+	BaseState      *BaseState         // Base state
 }
 
 func (c DiscordStateConfig) New() (*DiscordState, error) {
 	if c.Session == nil {
 		return nil, errors.New("discord not enabled")
+	}
+
+	if c.BaseState == nil {
+		return nil, errors.New("base state not provided")
 	}
 
 	return &DiscordState{
@@ -52,6 +57,10 @@ func (d *DiscordState) Init() error {
 
 func (d *DiscordState) Initted() bool {
 	return d.initialized
+}
+
+func (d *DiscordState) GetState() *BaseState {
+	return d.config.BaseState
 }
 
 func (d *DiscordState) ValidateId(id string) (string, error) {

@@ -12,24 +12,13 @@ import (
 	"go.uber.org/zap"
 )
 
-type State struct {
+type BaseState struct {
 	Logger         *zap.SugaredLogger
 	Context        context.Context
 	Pool           *pgxpool.Pool
 	Redis          *redis.Client
 	OnUpdate       func(u *PlatformUser) error
 	UserExpiryTime time.Duration
-
-	// internal
-	initted bool
-}
-
-var state *State
-
-// Sets global state, needed before making any call to dovewing
-func SetGlobalState(st *State) {
-	st.initted = true
-	state = st
 }
 
 type Platform interface {
@@ -37,6 +26,8 @@ type Platform interface {
 	Init() error
 	// returns whether or not the platform is initialized, init() must set this to true if called
 	Initted() bool
+	// Returns the base state
+	GetState() *BaseState
 	// returns the name of the platform, used for cache table names
 	PlatformName() string
 	// validate the id, if feasible
@@ -53,6 +44,8 @@ type Platform interface {
 
 // Common platform init code
 func InitPlatform(platform Platform) error {
+	state := platform.GetState()
+
 	var tableName = "internal_user_cache__" + platform.PlatformName()
 
 	_, err := state.Pool.Exec(state.Context, `
@@ -75,9 +68,7 @@ func InitPlatform(platform Platform) error {
 }
 
 func GetUser(ctx context.Context, id string, platform Platform) (*PlatformUser, error) {
-	if !state.initted {
-		return nil, errors.New("state not initialized")
-	}
+	state := platform.GetState()
 
 	if !platform.Initted() {
 		// call InitPlatform first
