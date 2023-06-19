@@ -31,8 +31,8 @@ type DiscordStateConfig struct {
 	PreferredGuild string             // Which guilds should be checked first for users, good if theres one guild with the majority of users
 }
 
-func (d *DiscordState) New(c *DiscordStateConfig) (*DiscordState, error) {
-	if d.config.Session == nil {
+func (c *DiscordStateConfig) New() (*DiscordState, error) {
+	if c.Session == nil {
 		return nil, errors.New("discord not enabled")
 	}
 
