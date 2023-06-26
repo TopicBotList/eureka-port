@@ -47,7 +47,7 @@ type Platform interface {
 func InitPlatform(platform Platform) error {
 	state := platform.GetState()
 
-	var tableName = "internal_user_cache__" + platform.PlatformName()
+	var tableName = TableName(platform)
 
 	_, err := state.Pool.Exec(state.Context, `
 		CREATE TABLE IF NOT EXISTS `+tableName+` (
@@ -68,6 +68,11 @@ func InitPlatform(platform Platform) error {
 	return platform.Init()
 }
 
+// Returns the table name of a platform
+func TableName(platform Platform) string {
+	return "internal_user_cache__" + platform.PlatformName()
+}
+
 // Fetches a user based on the platform
 func GetUser(ctx context.Context, id string, platform Platform) (*PlatformUser, error) {
 	state := platform.GetState()
@@ -86,7 +91,7 @@ func GetUser(ctx context.Context, id string, platform Platform) (*PlatformUser, 
 	}
 
 	var platformName = platform.PlatformName()
-	var tableName = "internal_user_cache__" + platformName
+	var tableName = TableName(platform)
 
 	// Common cacher, applicable to all use cases
 	cachedReturn := func(u *PlatformUser) (*PlatformUser, error) {
@@ -98,7 +103,7 @@ func GetUser(ctx context.Context, id string, platform Platform) (*PlatformUser, 
 			u.DisplayName = u.Username
 		}
 
-		// Update internal_user_cache
+		// Update cache
 		_, err := state.Pool.Exec(state.Context, "INSERT INTO "+tableName+" (id, username, display_name, avatar, bot) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (id) DO UPDATE SET username = $2, display_name = $3, avatar = $4, bot = $5, last_updated = NOW()", u.ID, u.Username, u.DisplayName, u.Avatar, u.Bot)
 
 		if err != nil {
@@ -270,7 +275,7 @@ func ClearUser(ctx context.Context, id string, platform Platform, req ClearUserR
 	}
 
 	var platformName = platform.PlatformName()
-	var tableName = "internal_user_cache__" + platformName
+	var tableName = TableName(platform)
 
 	var clearedFrom []ClearFrom
 
