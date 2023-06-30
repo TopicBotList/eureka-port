@@ -246,9 +246,18 @@ func Route(doc *Doc) {
 		panic("no path set in route: " + doc.OpId)
 	}
 
-	schemaName := reflect.TypeOf(doc.Resp).String()
+	var schemaName string
 
-	schemaName = strings.ReplaceAll(schemaName, "docs.", "")
+	if doc.Resp != nil {
+		doc.Resp = DocsSetupData.ErrorStruct
+	}
+
+	if doc.RespName != "" {
+		schemaName = doc.RespName
+	} else {
+		schemaName = reflect.TypeOf(doc.Resp).String()
+		schemaName = strings.ReplaceAll(schemaName, "docs.", "")
+	}
 
 	if schemaName != DocsSetupData.errorStructName {
 		if os.Getenv("DEBUG") == "true" {

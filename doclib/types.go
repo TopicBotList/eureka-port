@@ -127,6 +127,7 @@ type Doc struct {
 	Tags        []string
 	Req         any
 	Resp        any
+	RespName    string // Just in case resp cannot be used to derive the name
 	AuthType    []string
 }
 
