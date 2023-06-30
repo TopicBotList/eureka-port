@@ -248,7 +248,7 @@ func Route(doc *Doc) {
 
 	var schemaName string
 
-	if doc.Resp != nil {
+	if doc.Resp == nil {
 		doc.Resp = DocsSetupData.ErrorStruct
 	}
 
