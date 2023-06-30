@@ -1,4 +1,4 @@
-package dovewing
+package dovetypes
 
 type PlatformStatus string
 

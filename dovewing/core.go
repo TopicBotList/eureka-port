@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/infinitybotlist/eureka/dovewing/dovetypes"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
@@ -18,7 +19,7 @@ type BaseState struct {
 	Context        context.Context
 	Pool           *pgxpool.Pool
 	Redis          *redis.Client
-	OnUpdate       func(u *PlatformUser) error
+	OnUpdate       func(u *dovetypes.PlatformUser) error
 	UserExpiryTime time.Duration
 }
 
@@ -38,9 +39,9 @@ type Platform interface {
 	// if user not found, return nil, nil (error should be nil and user obj should be nil)
 	//
 	// note that returning a error here will cause the user to not be fetched from the platform
-	PlatformSpecificCache(ctx context.Context, id string) (*PlatformUser, error)
+	PlatformSpecificCache(ctx context.Context, id string) (*dovetypes.PlatformUser, error)
 	// fetch a user from the platform, at this point, assume that cache has been checked
-	GetUser(ctx context.Context, id string) (*PlatformUser, error)
+	GetUser(ctx context.Context, id string) (*dovetypes.PlatformUser, error)
 }
 
 // Common platform init code
@@ -74,7 +75,7 @@ func TableName(platform Platform) string {
 }
 
 // Fetches a user based on the platform
-func GetUser(ctx context.Context, id string, platform Platform) (*PlatformUser, error) {
+func GetUser(ctx context.Context, id string, platform Platform) (*dovetypes.PlatformUser, error) {
 	state := platform.GetState()
 
 	if !platform.Initted() {
@@ -94,7 +95,7 @@ func GetUser(ctx context.Context, id string, platform Platform) (*PlatformUser, 
 	var tableName = TableName(platform)
 
 	// Common cacher, applicable to all use cases
-	cachedReturn := func(u *PlatformUser) (*PlatformUser, error) {
+	cachedReturn := func(u *dovetypes.PlatformUser) (*dovetypes.PlatformUser, error) {
 		if u == nil {
 			return nil, errors.New("user not found")
 		}
@@ -142,7 +143,7 @@ func GetUser(ctx context.Context, id string, platform Platform) (*PlatformUser, 
 
 	if err == nil {
 		// Try to unmarshal
-		var user PlatformUser
+		var user dovetypes.PlatformUser
 
 		err = json.Unmarshal([]byte(userBytes), &user)
 
@@ -186,7 +187,7 @@ func GetUser(ctx context.Context, id string, platform Platform) (*PlatformUser, 
 					state.Logger.Error("Failed to update expired user cache", zap.Error(err))
 				}
 
-				cachedReturn(&PlatformUser{
+				cachedReturn(&dovetypes.PlatformUser{
 					ID:          id,
 					Username:    user.Username,
 					Avatar:      user.Avatar,
@@ -209,13 +210,13 @@ func GetUser(ctx context.Context, id string, platform Platform) (*PlatformUser, 
 			return nil, err
 		}
 
-		return cachedReturn(&PlatformUser{
+		return cachedReturn(&dovetypes.PlatformUser{
 			ID:          id,
 			Username:    username,
 			Avatar:      avatar,
 			DisplayName: displayName,
 			Bot:         bot,
-			Status:      PlatformStatusOffline,
+			Status:      dovetypes.PlatformStatusOffline,
 			ExtraData: map[string]any{
 				"cache": "pg",
 			},

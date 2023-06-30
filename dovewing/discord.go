@@ -6,18 +6,19 @@ import (
 	"strconv"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/infinitybotlist/eureka/dovewing/dovetypes"
 )
 
-func discordPlatformStatus(status discordgo.Status) PlatformStatus {
+func discordPlatformStatus(status discordgo.Status) dovetypes.PlatformStatus {
 	switch status {
 	case discordgo.StatusOnline:
-		return PlatformStatusOnline
+		return dovetypes.PlatformStatusOnline
 	case discordgo.StatusIdle:
-		return PlatformStatusIdle
+		return dovetypes.PlatformStatusIdle
 	case discordgo.StatusDoNotDisturb:
-		return PlatformStatusDoNotDisturb
+		return dovetypes.PlatformStatusDoNotDisturb
 	default:
-		return PlatformStatusOffline
+		return dovetypes.PlatformStatusOffline
 	}
 }
 
@@ -77,7 +78,7 @@ func (d *DiscordState) ValidateId(id string) (string, error) {
 	return id, nil
 }
 
-func (d *DiscordState) PlatformSpecificCache(ctx context.Context, id string) (*PlatformUser, error) {
+func (d *DiscordState) PlatformSpecificCache(ctx context.Context, id string) (*dovetypes.PlatformUser, error) {
 	// First try for main server
 	if d.config.PreferredGuild != "" {
 		member, err := d.config.Session.State.Member(d.config.PreferredGuild, id)
@@ -92,7 +93,7 @@ func (d *DiscordState) PlatformSpecificCache(ctx context.Context, id string) (*P
 				}
 			}
 
-			return &PlatformUser{
+			return &dovetypes.PlatformUser{
 				ID:          id,
 				Username:    member.User.Username,
 				Avatar:      member.User.AvatarURL(""),
@@ -126,7 +127,7 @@ func (d *DiscordState) PlatformSpecificCache(ctx context.Context, id string) (*P
 				}
 			}
 
-			return &PlatformUser{
+			return &dovetypes.PlatformUser{
 				ID:          id,
 				Username:    member.User.Username,
 				Avatar:      member.User.AvatarURL(""),
@@ -146,7 +147,7 @@ func (d *DiscordState) PlatformSpecificCache(ctx context.Context, id string) (*P
 	return nil, nil
 }
 
-func (d *DiscordState) GetUser(ctx context.Context, id string) (*PlatformUser, error) {
+func (d *DiscordState) GetUser(ctx context.Context, id string) (*dovetypes.PlatformUser, error) {
 	// Get from discord
 	user, err := d.config.Session.User(id)
 
@@ -154,12 +155,12 @@ func (d *DiscordState) GetUser(ctx context.Context, id string) (*PlatformUser, e
 		return nil, err
 	}
 
-	return &PlatformUser{
+	return &dovetypes.PlatformUser{
 		ID:          id,
 		Username:    user.Username,
 		Avatar:      user.AvatarURL(""),
 		DisplayName: user.GlobalName,
 		Bot:         user.Bot,
-		Status:      PlatformStatusOffline,
+		Status:      dovetypes.PlatformStatusOffline,
 	}, nil
 }
