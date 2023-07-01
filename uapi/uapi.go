@@ -20,6 +20,22 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+type UAPIConstants struct {
+	NotFound         string
+	NotFoundPage     string
+	BadRequest       string
+	Forbidden        string
+	Unauthorized     string
+	InternalError    string
+	MethodNotAllowed string
+	BodyRequired     string
+}
+
+type UAPIErrorType interface {
+	// Returns the error as the error type
+	New(err string, ctx map[string]string) any
+}
+
 // Setup struct
 type UAPIState struct {
 	Logger              *zap.SugaredLogger
@@ -31,9 +47,19 @@ type UAPIState struct {
 	Redis *redis.Client
 	// Used in cache algo
 	Context context.Context
+
+	// Api constants
+	Constants *UAPIConstants
+
+	// UApi Error type to use for error responses
+	UAPIErrorType UAPIErrorType
 }
 
 func SetupState(s UAPIState) {
+	if s.Constants == nil {
+		panic("Constants is nil")
+	}
+
 	state = s
 }
 
@@ -41,25 +67,6 @@ var (
 	json  = jsoniter.ConfigCompatibleWithStandardLibrary
 	state UAPIState
 )
-
-const (
-	NotFound         = "{\"message\":\"Slow down, bucko! We couldn't find this resource *anywhere*!\",\"error\":true}"
-	NotFoundPage     = "{\"message\":\"Slow down, bucko! You got the path wrong or something but this endpoint doesn't exist!\",\"error\":true}"
-	BadRequest       = "{\"message\":\"Slow down, bucko! You're doing something illegal!!!\",\"error\":true}"
-	Forbidden        = "{\"message\":\"Slow down, bucko! You're not allowed to do this!\",\"error\":true}"
-	Unauthorized     = "{\"message\":\"Slow down, bucko! You're not authorized to do this or did you forget a API token somewhere?\",\"error\":true}"
-	InternalError    = "{\"message\":\"Slow down, bucko! Something went wrong on our end!\",\"error\":true}"
-	MethodNotAllowed = "{\"message\":\"Slow down, bucko! That method is not allowed for this endpoint!!!\",\"error\":true}"
-	BackTick         = "`"
-	DoubleBackTick   = "``"
-)
-
-// This represents a UAPI Error
-type ApiError struct {
-	Context map[string]string `json:"context,omitempty" description:"Context of the error. Usually used for validation error contexts"`
-	Message string            `json:"message" description:"Message of the error"`
-	Error   bool              `json:"error" description:"Whether or not this is an error"`
-}
 
 // Stores the current tag
 var CurrentTag string
@@ -240,7 +247,7 @@ func (r Route) Route(ro Router) {
 					state.Logger.Error(err)
 					resp <- HttpResponse{
 						Status: http.StatusInternalServerError,
-						Data:   InternalError,
+						Data:   state.Constants.InternalError,
 					}
 				}
 			}()
@@ -264,10 +271,7 @@ func (r Route) Route(ro Router) {
 				if err != nil {
 					resp <- HttpResponse{
 						Status: http.StatusInternalServerError,
-						Json: ApiError{
-							Message: err.Error(),
-							Error:   false,
-						},
+						Json:   state.UAPIErrorType.New(err.Error(), nil),
 					}
 					return
 				}
@@ -304,7 +308,7 @@ func respond(ctx context.Context, w http.ResponseWriter, data chan HttpResponse)
 	case msg, ok := <-data:
 		if !ok {
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(InternalError))
+			w.Write([]byte(state.Constants.InternalError))
 		}
 
 		if msg.Redirect != "" {
@@ -328,7 +332,7 @@ func respond(ctx context.Context, w http.ResponseWriter, data chan HttpResponse)
 			if err != nil {
 				state.Logger.Error(err)
 				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(InternalError))
+				w.Write([]byte(state.Constants.InternalError))
 				return
 			}
 
@@ -434,11 +438,7 @@ func ValidatorErrorResponse(compiled map[string]string, v validator.ValidationEr
 
 	return HttpResponse{
 		Status: http.StatusBadRequest,
-		Json: ApiError{
-			Context: errors,
-			Error:   true,
-			Message: firstError,
-		},
+		Json:   state.UAPIErrorType.New(firstError, errors),
 	}
 }
 
@@ -449,32 +449,32 @@ func DefaultResponse(statusCode int) HttpResponse {
 	case http.StatusForbidden:
 		return HttpResponse{
 			Status: statusCode,
-			Data:   Forbidden,
+			Data:   state.Constants.Forbidden,
 		}
 	case http.StatusUnauthorized:
 		return HttpResponse{
 			Status: statusCode,
-			Data:   Unauthorized,
+			Data:   state.Constants.Unauthorized,
 		}
 	case http.StatusNotFound:
 		return HttpResponse{
 			Status: statusCode,
-			Data:   NotFound,
+			Data:   state.Constants.NotFound,
 		}
 	case http.StatusBadRequest:
 		return HttpResponse{
 			Status: statusCode,
-			Data:   BadRequest,
+			Data:   state.Constants.BadRequest,
 		}
 	case http.StatusInternalServerError:
 		return HttpResponse{
 			Status: statusCode,
-			Data:   InternalError,
+			Data:   state.Constants.InternalError,
 		}
 	case http.StatusMethodNotAllowed:
 		return HttpResponse{
 			Status: statusCode,
-			Data:   MethodNotAllowed,
+			Data:   state.Constants.MethodNotAllowed,
 		}
 	case http.StatusNoContent, http.StatusOK:
 		return HttpResponse{
@@ -484,7 +484,7 @@ func DefaultResponse(statusCode int) HttpResponse {
 
 	return HttpResponse{
 		Status: statusCode,
-		Data:   InternalError,
+		Data:   state.Constants.InternalError,
 	}
 }
 
@@ -502,10 +502,7 @@ func marshalReq(r *http.Request, dst interface{}) (resp HttpResponse, ok bool) {
 	if len(bodyBytes) == 0 {
 		return HttpResponse{
 			Status: http.StatusBadRequest,
-			Json: ApiError{
-				Message: "A body is required for this endpoint",
-				Error:   true,
-			},
+			Json:   state.Constants.BodyRequired,
 		}, false
 	}
 
@@ -515,21 +512,20 @@ func marshalReq(r *http.Request, dst interface{}) (resp HttpResponse, ok bool) {
 		state.Logger.Error(err)
 		return HttpResponse{
 			Status: http.StatusBadRequest,
-			Json: ApiError{
-				Message: "Invalid JSON: " + err.Error(),
-				Error:   true,
-			},
+			Json: state.UAPIErrorType.New("Invalid JSON", map[string]string{
+				"error": err.Error(),
+			}),
 		}, false
 	}
 
 	return HttpResponse{}, true
 }
 
-func MarshalReq(r *http.Request, dst interface{}) (resp HttpResponse, ok bool) {
+func MarshalReq(r *http.Request, dst any) (resp HttpResponse, ok bool) {
 	return marshalReq(r, dst)
 }
 
-func MarshalReqWithHeaders(r *http.Request, dst interface{}, headers map[string]string) (resp HttpResponse, ok bool) {
+func MarshalReqWithHeaders(r *http.Request, dst any, headers map[string]string) (resp HttpResponse, ok bool) {
 	resp, err := marshalReq(r, dst)
 
 	resp.Headers = headers
