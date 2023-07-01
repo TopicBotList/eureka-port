@@ -166,10 +166,6 @@ func (c *simpleYamlParser) vToYaml(v reflect.StructField) string {
 			// Get the default tag
 			defTag := v.Tag.Get("default")
 
-			if defTag == "" {
-				panic("default tag is empty")
-			}
-
 			// Split the default tag by commas
 			split = strings.Split(defTag, ",")
 		} else {
