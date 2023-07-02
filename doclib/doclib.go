@@ -357,6 +357,8 @@ func Route(doc *Doc) {
 	op, _ := api.Paths.Get(doc.Pattern)
 
 	switch strings.ToLower(doc.Method) {
+	case "head":
+		op.Head = operationData
 	case "get":
 		op.Get = operationData
 	case "post":

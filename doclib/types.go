@@ -94,6 +94,7 @@ type Operation struct {
 type Path struct {
 	Summary     string     `json:"summary"` // Danger do not use this
 	Description string     `json:"description"`
+	Head        *Operation `json:"head,omitempty"`
 	Get         *Operation `json:"get,omitempty"`
 	Post        *Operation `json:"post,omitempty"`
 	Put         *Operation `json:"put,omitempty"`
