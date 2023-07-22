@@ -60,16 +60,18 @@ func SetupState(s UAPIState) {
 		panic("Constants is nil")
 	}
 
-	state = s
+	State = &s
 }
 
 var (
-	json  = jsoniter.ConfigCompatibleWithStandardLibrary
-	state UAPIState
-)
+	json = jsoniter.ConfigCompatibleWithStandardLibrary
 
-// Stores the current tag
-var CurrentTag string
+	// Stores the current tag
+	CurrentTag string
+
+	// Stores the UAPI state for UAPI plugins
+	State *UAPIState
+)
 
 // A API Router, not to be confused with Router which routes the actual routes
 type APIRouter interface {
@@ -186,7 +188,7 @@ func (r Route) Route(ro Router) {
 	docsObj.AuthType = []string{}
 
 	for _, auth := range r.Auth {
-		t, ok := state.AuthTypeMap[auth.Type]
+		t, ok := State.AuthTypeMap[auth.Type]
 
 		if !ok {
 			panic("Invalid auth type: " + auth.Type)
@@ -244,15 +246,15 @@ func (r Route) Route(ro Router) {
 				err := recover()
 
 				if err != nil {
-					state.Logger.Error(err)
+					State.Logger.Error(err)
 					resp <- HttpResponse{
 						Status: http.StatusInternalServerError,
-						Data:   state.Constants.InternalError,
+						Data:   State.Constants.InternalError,
 					}
 				}
 			}()
 
-			authData, httpResp, ok := state.Authorize(r, req)
+			authData, httpResp, ok := State.Authorize(r, req)
 
 			if !ok {
 				resp <- httpResp
@@ -264,14 +266,14 @@ func (r Route) Route(ro Router) {
 				Auth:    authData,
 			}
 
-			if state.RouteDataMiddleware != nil {
+			if State.RouteDataMiddleware != nil {
 				var err error
-				rd, err = state.RouteDataMiddleware(rd, req)
+				rd, err = State.RouteDataMiddleware(rd, req)
 
 				if err != nil {
 					resp <- HttpResponse{
 						Status: http.StatusInternalServerError,
-						Json:   state.UAPIErrorType.New(err.Error(), nil),
+						Json:   State.UAPIErrorType.New(err.Error(), nil),
 					}
 					return
 				}
@@ -308,7 +310,7 @@ func respond(ctx context.Context, w http.ResponseWriter, data chan HttpResponse)
 	case msg, ok := <-data:
 		if !ok {
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(state.Constants.InternalError))
+			w.Write([]byte(State.Constants.InternalError))
 		}
 
 		if msg.Redirect != "" {
@@ -330,9 +332,9 @@ func respond(ctx context.Context, w http.ResponseWriter, data chan HttpResponse)
 			bytes, err := json.Marshal(msg.Json)
 
 			if err != nil {
-				state.Logger.Error(err)
+				State.Logger.Error(err)
 				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(state.Constants.InternalError))
+				w.Write([]byte(State.Constants.InternalError))
 				return
 			}
 
@@ -347,10 +349,10 @@ func respond(ctx context.Context, w http.ResponseWriter, data chan HttpResponse)
 
 			if msg.CacheKey != "" && msg.CacheTime.Seconds() > 0 {
 				go func() {
-					err := state.Redis.Set(state.Context, msg.CacheKey, bytes, msg.CacheTime).Err()
+					err := State.Redis.Set(State.Context, msg.CacheKey, bytes, msg.CacheTime).Err()
 
 					if err != nil {
-						state.Logger.Error(err)
+						State.Logger.Error(err)
 					}
 				}()
 			}
@@ -438,7 +440,7 @@ func ValidatorErrorResponse(compiled map[string]string, v validator.ValidationEr
 
 	return HttpResponse{
 		Status: http.StatusBadRequest,
-		Json:   state.UAPIErrorType.New(firstError, errors),
+		Json:   State.UAPIErrorType.New(firstError, errors),
 	}
 }
 
@@ -449,32 +451,32 @@ func DefaultResponse(statusCode int) HttpResponse {
 	case http.StatusForbidden:
 		return HttpResponse{
 			Status: statusCode,
-			Data:   state.Constants.Forbidden,
+			Data:   State.Constants.Forbidden,
 		}
 	case http.StatusUnauthorized:
 		return HttpResponse{
 			Status: statusCode,
-			Data:   state.Constants.Unauthorized,
+			Data:   State.Constants.Unauthorized,
 		}
 	case http.StatusNotFound:
 		return HttpResponse{
 			Status: statusCode,
-			Data:   state.Constants.NotFound,
+			Data:   State.Constants.NotFound,
 		}
 	case http.StatusBadRequest:
 		return HttpResponse{
 			Status: statusCode,
-			Data:   state.Constants.BadRequest,
+			Data:   State.Constants.BadRequest,
 		}
 	case http.StatusInternalServerError:
 		return HttpResponse{
 			Status: statusCode,
-			Data:   state.Constants.InternalError,
+			Data:   State.Constants.InternalError,
 		}
 	case http.StatusMethodNotAllowed:
 		return HttpResponse{
 			Status: statusCode,
-			Data:   state.Constants.MethodNotAllowed,
+			Data:   State.Constants.MethodNotAllowed,
 		}
 	case http.StatusNoContent, http.StatusOK:
 		return HttpResponse{
@@ -484,7 +486,7 @@ func DefaultResponse(statusCode int) HttpResponse {
 
 	return HttpResponse{
 		Status: statusCode,
-		Data:   state.Constants.InternalError,
+		Data:   State.Constants.InternalError,
 	}
 }
 
@@ -495,24 +497,24 @@ func marshalReq(r *http.Request, dst interface{}) (resp HttpResponse, ok bool) {
 	bodyBytes, err := io.ReadAll(r.Body)
 
 	if err != nil {
-		state.Logger.Error(err)
+		State.Logger.Error(err)
 		return DefaultResponse(http.StatusInternalServerError), false
 	}
 
 	if len(bodyBytes) == 0 {
 		return HttpResponse{
 			Status: http.StatusBadRequest,
-			Json:   state.Constants.BodyRequired,
+			Json:   State.Constants.BodyRequired,
 		}, false
 	}
 
 	err = json.Unmarshal(bodyBytes, &dst)
 
 	if err != nil {
-		state.Logger.Error(err)
+		State.Logger.Error(err)
 		return HttpResponse{
 			Status: http.StatusBadRequest,
-			Json: state.UAPIErrorType.New("Invalid JSON", map[string]string{
+			Json: State.UAPIErrorType.New("Invalid JSON", map[string]string{
 				"error": err.Error(),
 			}),
 		}, false
