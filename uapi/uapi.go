@@ -219,7 +219,7 @@ func (r Route) Route(ro Router) {
 	}
 
 	// Get pattern params from the pattern
-	if r.DisablePathSlashCheck {
+	if !r.DisablePathSlashCheck {
 		for _, param := range strings.Split(r.Pattern, "/") {
 			if strings.HasPrefix(param, "{") && strings.HasSuffix(param, "}") {
 				patternParams = append(patternParams, param[1:len(param)-1])
