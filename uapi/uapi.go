@@ -133,6 +133,11 @@ type Route struct {
 	Docs         func() *docs.Doc
 	Auth         []AuthType
 	AuthOptional bool
+
+	// Disables sanity check that ensures all variables are followed by a /
+	//
+	// e.g. /{foo}s/
+	DisablePathSlashCheck bool
 }
 
 type RouteData struct {
@@ -214,11 +219,13 @@ func (r Route) Route(ro Router) {
 	}
 
 	// Get pattern params from the pattern
-	for _, param := range strings.Split(r.Pattern, "/") {
-		if strings.HasPrefix(param, "{") && strings.HasSuffix(param, "}") {
-			patternParams = append(patternParams, param[1:len(param)-1])
-		} else if strings.Contains(param, "{") || strings.Contains(param, "}") {
-			panic("{ and } in pattern but does not start with it " + r.String())
+	if r.DisablePathSlashCheck {
+		for _, param := range strings.Split(r.Pattern, "/") {
+			if strings.HasPrefix(param, "{") && strings.HasSuffix(param, "}") {
+				patternParams = append(patternParams, param[1:len(param)-1])
+			} else if strings.Contains(param, "{") || strings.Contains(param, "}") {
+				panic("{ and } in pattern but does not start with it " + r.String())
+			}
 		}
 	}
 
