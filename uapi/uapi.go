@@ -237,8 +237,10 @@ func (r Route) Route(ro Router) {
 		panic("Mismatched number of params and { in pattern: " + r.String())
 	}
 
-	if !slices.Equal(patternParams, pathParams) {
-		panic("Mismatched params in pattern and docs: " + r.String())
+	if !r.DisablePathSlashCheck {
+		if !slices.Equal(patternParams, pathParams) {
+			panic("Mismatched params in pattern and docs: " + r.String())
+		}
 	}
 
 	// Add the path params to the docs
