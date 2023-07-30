@@ -185,6 +185,7 @@ func GetUser(ctx context.Context, id string, platform Platform) (*dovetypes.Plat
 
 				if err != nil {
 					state.Logger.Error("Failed to update expired user cache", zap.Error(err))
+					return
 				}
 
 				cachedReturn(&dovetypes.PlatformUser{

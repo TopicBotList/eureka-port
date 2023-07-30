@@ -3,7 +3,7 @@ module github.com/infinitybotlist/eureka
 go 1.19
 
 require (
-	github.com/bwmarrin/discordgo v0.27.1
+	github.com/bwmarrin/discordgo v0.27.2-0.20230704233747-e39e715086d2
 	github.com/getkin/kin-openapi v0.115.0
 	github.com/jackc/pgx/v5 v5.3.1
 	github.com/redis/go-redis/v9 v9.0.3
