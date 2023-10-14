@@ -117,10 +117,11 @@ type AuthType struct {
 }
 
 type AuthData struct {
-	TargetType string `json:"target_type"`
-	ID         string `json:"id"`
-	Authorized bool   `json:"authorized"`
-	Banned     bool   `json:"banned"` // Only applicable with AllowedScope
+	TargetType string         `json:"target_type"`
+	ID         string         `json:"id"`
+	Authorized bool           `json:"authorized"`
+	Banned     bool           `json:"banned"` // Only applicable with AllowedScope
+	Data       map[string]any `json:"data"`   // Additional data
 }
 
 // Represents a route on the API
