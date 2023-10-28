@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/infinitybotlist/eureka/dovewing/dovetypes"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
@@ -15,7 +16,7 @@ import (
 )
 
 type BaseState struct {
-	Logger         *zap.SugaredLogger
+	Logger         *zap.Logger
 	Context        context.Context
 	Pool           *pgxpool.Pool
 	Redis          *redis.Client
@@ -160,9 +161,11 @@ func GetUser(ctx context.Context, id string, platform Platform) (*dovetypes.Plat
 
 	err = state.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM "+tableName+" WHERE id = $1", id).Scan(&count)
 
-	// If theres a error here, then warn and continue. We never want to fail a fetch because of a internal cache table being remade
-	if err != nil {
-		state.Logger.Warnf("failed to check internal user cache: %s", err)
+	if errors.Is(err, pgx.ErrNoRows) {
+		count = 0
+	} else if err != nil {
+		// If theres a error here, then warn and continue. We never want to fail a fetch because of a internal cache table being remade
+		state.Logger.Warn("Failed to check internal user cache.", zap.Error(err), zap.String("id", id), zap.String("platform", platformName), zap.String("tableName", tableName))
 	}
 
 	if err == nil && count > 0 {

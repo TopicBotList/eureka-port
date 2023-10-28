@@ -38,7 +38,7 @@ type UAPIErrorType interface {
 
 // Setup struct
 type UAPIState struct {
-	Logger              *zap.SugaredLogger
+	Logger              *zap.Logger
 	Authorize           func(r Route, req *http.Request) (AuthData, HttpResponse, bool)
 	AuthTypeMap         map[string]string // E.g. bot => Bot, user => User etc.
 	RouteDataMiddleware func(rd *RouteData, req *http.Request) (*RouteData, error)
@@ -247,67 +247,31 @@ func (r Route) Route(ro Router) {
 	// Add the path params to the docs
 	docs.Route(docsObj)
 
-	handle := func(w http.ResponseWriter, req *http.Request) {
-		ctx := req.Context()
-		resp := make(chan HttpResponse)
-
-		go func() {
-			defer func() {
-				err := recover()
-
-				if err != nil {
-					State.Logger.Error(err)
-					resp <- HttpResponse{
-						Status: http.StatusInternalServerError,
-						Data:   State.Constants.InternalError,
-					}
-				}
-			}()
-
-			authData, httpResp, ok := State.Authorize(r, req)
-
-			if !ok {
-				resp <- httpResp
-				return
-			}
-
-			rd := &RouteData{
-				Context: ctx,
-				Auth:    authData,
-			}
-
-			if State.RouteDataMiddleware != nil {
-				var err error
-				rd, err = State.RouteDataMiddleware(rd, req)
-
-				if err != nil {
-					resp <- HttpResponse{
-						Status: http.StatusInternalServerError,
-						Json:   State.UAPIErrorType.New(err.Error(), nil),
-					}
-					return
-				}
-			}
-
-			resp <- r.Handler(*rd, req)
-		}()
-
-		respond(ctx, w, resp)
-	}
-
 	switch r.Method {
 	case GET:
-		ro.Get(r.Pattern, handle)
+		ro.Get(r.Pattern, func(w http.ResponseWriter, req *http.Request) {
+			handle(r, w, req)
+		})
 	case POST:
-		ro.Post(r.Pattern, handle)
+		ro.Post(r.Pattern, func(w http.ResponseWriter, req *http.Request) {
+			handle(r, w, req)
+		})
 	case PATCH:
-		ro.Patch(r.Pattern, handle)
+		ro.Patch(r.Pattern, func(w http.ResponseWriter, req *http.Request) {
+			handle(r, w, req)
+		})
 	case PUT:
-		ro.Put(r.Pattern, handle)
+		ro.Put(r.Pattern, func(w http.ResponseWriter, req *http.Request) {
+			handle(r, w, req)
+		})
 	case DELETE:
-		ro.Delete(r.Pattern, handle)
+		ro.Delete(r.Pattern, func(w http.ResponseWriter, req *http.Request) {
+			handle(r, w, req)
+		})
 	case HEAD:
-		ro.Head(r.Pattern, handle)
+		ro.Head(r.Pattern, func(w http.ResponseWriter, req *http.Request) {
+			handle(r, w, req)
+		})
 	default:
 		panic("Unknown method for route: " + r.String())
 	}
@@ -342,7 +306,7 @@ func respond(ctx context.Context, w http.ResponseWriter, data chan HttpResponse)
 			bytes, err := json.Marshal(msg.Json)
 
 			if err != nil {
-				State.Logger.Error(err)
+				State.Logger.Error("[uapi.respond] Failed to unmarshal JSON response", zap.Error(err), zap.Int("size", len(msg.Data)))
 				w.WriteHeader(http.StatusInternalServerError)
 				w.Write([]byte(State.Constants.InternalError))
 				return
@@ -362,7 +326,7 @@ func respond(ctx context.Context, w http.ResponseWriter, data chan HttpResponse)
 					err := State.Redis.Set(State.Context, msg.CacheKey, bytes, msg.CacheTime).Err()
 
 					if err != nil {
-						State.Logger.Error(err)
+						State.Logger.Error("[uapi.respond] Failed to cache JSON response", zap.Error(err), zap.String("key", msg.CacheKey), zap.Int("size", len(bytes)))
 					}
 				}()
 			}
@@ -500,6 +464,54 @@ func DefaultResponse(statusCode int) HttpResponse {
 	}
 }
 
+func handle(r Route, w http.ResponseWriter, req *http.Request) {
+	ctx := req.Context()
+	resp := make(chan HttpResponse)
+
+	go func() {
+		defer func() {
+			err := recover()
+
+			if err != nil {
+				State.Logger.Error("[uapi/handle] Request handler panic'd", zap.String("operationId", r.OpId), zap.String("method", req.Method), zap.String("endpointPattern", r.Pattern), zap.String("path", req.URL.Path), zap.Any("error", err))
+				resp <- HttpResponse{
+					Status: http.StatusInternalServerError,
+					Data:   State.Constants.InternalError,
+				}
+			}
+		}()
+
+		authData, httpResp, ok := State.Authorize(r, req)
+
+		if !ok {
+			resp <- httpResp
+			return
+		}
+
+		rd := &RouteData{
+			Context: ctx,
+			Auth:    authData,
+		}
+
+		if State.RouteDataMiddleware != nil {
+			var err error
+			rd, err = State.RouteDataMiddleware(rd, req)
+
+			if err != nil {
+				resp <- HttpResponse{
+					Status: http.StatusInternalServerError,
+					Json:   State.UAPIErrorType.New(err.Error(), nil),
+				}
+				return
+			}
+		}
+
+		resp <- r.Handler(*rd, req)
+	}()
+
+	respond(ctx, w, resp)
+}
+
 // Read body
 func marshalReq(r *http.Request, dst interface{}) (resp HttpResponse, ok bool) {
 	defer r.Body.Close()
@@ -507,7 +519,7 @@ func marshalReq(r *http.Request, dst interface{}) (resp HttpResponse, ok bool) {
 	bodyBytes, err := io.ReadAll(r.Body)
 
 	if err != nil {
-		State.Logger.Error(err)
+		State.Logger.Error("[uapi/marshalReq] Failed to read body", zap.Error(err), zap.Int("size", len(bodyBytes)))
 		return DefaultResponse(http.StatusInternalServerError), false
 	}
 
@@ -521,7 +533,7 @@ func marshalReq(r *http.Request, dst interface{}) (resp HttpResponse, ok bool) {
 	err = json.Unmarshal(bodyBytes, &dst)
 
 	if err != nil {
-		State.Logger.Error(err)
+		State.Logger.Error("[uapi/marshalReq] Failed to unmarshal JSON", zap.Error(err), zap.Int("size", len(bodyBytes)))
 		return HttpResponse{
 			Status: http.StatusBadRequest,
 			Json: State.UAPIErrorType.New("Invalid JSON", map[string]string{

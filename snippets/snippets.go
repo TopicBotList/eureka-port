@@ -10,7 +10,7 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-func CreateZap() *zap.SugaredLogger {
+func CreateZap() *zap.Logger {
 	w := zapcore.AddSync(os.Stdout)
 
 	core := zapcore.NewCore(
@@ -19,7 +19,7 @@ func CreateZap() *zap.SugaredLogger {
 		zap.DebugLevel,
 	)
 
-	return zap.New(core).Sugar()
+	return zap.New(core)
 }
 
 // Some validators
