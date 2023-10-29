@@ -76,6 +76,13 @@ type UAPIState struct {
 	//
 	// This is used for 404 errors, validation errors, default statuses etc.
 	DefaultResponder UAPIDefaultResponder
+
+	// Used to store init data
+	InitData UAPIInitData
+}
+
+func (s *UAPIState) SetCurrentTag(tag string) {
+	s.InitData.Tag = tag
 }
 
 func SetupState(s UAPIState) {
@@ -87,10 +94,7 @@ func SetupState(s UAPIState) {
 }
 
 var (
-	json = jsoniter.ConfigCompatibleWithStandardLibrary
-
-	// Stores the current tag
-	CurrentTag string
+	Json = jsoniter.ConfigFastest
 
 	// Stores the UAPI state for UAPI plugins
 	State *UAPIState
@@ -200,7 +204,7 @@ func (r Route) Route(ro Router) {
 		panic("Pattern is empty: " + r.String())
 	}
 
-	if CurrentTag == "" {
+	if State.InitData.Tag == "" {
 		panic("CurrentTag is empty: " + r.String())
 	}
 
@@ -213,7 +217,7 @@ func (r Route) Route(ro Router) {
 	docsObj.Pattern = r.Pattern
 	docsObj.OpId = r.OpId
 	docsObj.Method = r.Method.String()
-	docsObj.Tags = []string{CurrentTag}
+	docsObj.Tags = []string{State.InitData.Tag}
 	docsObj.AuthType = []string{}
 
 	for _, auth := range r.Auth {
@@ -326,7 +330,7 @@ func respond(ctx context.Context, w http.ResponseWriter, data chan HttpResponse)
 		}
 
 		if msg.Json != nil {
-			bytes, err := json.Marshal(msg.Json)
+			bytes, err := Json.Marshal(msg.Json)
 
 			if err != nil {
 				State.Logger.Error("[uapi.respond] Failed to unmarshal JSON response", zap.Error(err), zap.Int("size", len(msg.Data)))
@@ -553,7 +557,7 @@ func marshalReq(r *http.Request, dst interface{}) (resp HttpResponse, ok bool) {
 		}, false
 	}
 
-	err = json.Unmarshal(bodyBytes, &dst)
+	err = Json.Unmarshal(bodyBytes, &dst)
 
 	if err != nil {
 		State.Logger.Error("[uapi/marshalReq] Failed to unmarshal JSON", zap.Error(err), zap.Int("size", len(bodyBytes)))
