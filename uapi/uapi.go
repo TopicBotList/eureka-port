@@ -21,19 +21,37 @@ import (
 )
 
 type UAPIConstants struct {
-	NotFound         string
-	NotFoundPage     string
-	BadRequest       string
-	Forbidden        string
-	Unauthorized     string
-	InternalError    string
+	// String returned when the resource could not be found
+	ResourceNotFound string
+
+	// String returned when the request is invalid
+	BadRequest string
+
+	// String returned when the user is not authorized (403)
+	Forbidden string
+
+	// String returned when the user is not authorized (401)
+	Unauthorized string
+
+	// String returned when the server encounters an internal error
+	InternalServerError string
+
+	// String returned when the method is not allowed
 	MethodNotAllowed string
-	BodyRequired     string
+
+	// String returned when the body is required
+	BodyRequired string
 }
 
-type UAPIErrorType interface {
-	// Returns the error as the error type
-	New(err string, ctx map[string]string) any
+type UAPIDefaultResponder interface {
+	// Returns the msg with the response type
+	New(msg string, ctx map[string]string) any
+}
+
+// This struct contains initialization data while loading UAPI (such as the current tag etc.)
+type UAPIInitData struct {
+	// The current tag being loaded
+	Tag string
 }
 
 // Setup struct
@@ -43,16 +61,21 @@ type UAPIState struct {
 	AuthTypeMap         map[string]string // E.g. bot => Bot, user => User etc.
 	RouteDataMiddleware func(rd *RouteData, req *http.Request) (*RouteData, error)
 
-	// Used in cache algo
+	// Used for caching
+	//
+	// TODO: Make this a interface
 	Redis *redis.Client
+
 	// Used in cache algo
 	Context context.Context
 
 	// Api constants
 	Constants *UAPIConstants
 
-	// UApi Error type to use for error responses
-	UAPIErrorType UAPIErrorType
+	// UAPI default response type to use for default responses
+	//
+	// This is used for 404 errors, validation errors, default statuses etc.
+	DefaultResponder UAPIDefaultResponder
 }
 
 func SetupState(s UAPIState) {
@@ -284,7 +307,7 @@ func respond(ctx context.Context, w http.ResponseWriter, data chan HttpResponse)
 	case msg, ok := <-data:
 		if !ok {
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(State.Constants.InternalError))
+			w.Write([]byte(State.Constants.InternalServerError))
 		}
 
 		if msg.Redirect != "" {
@@ -308,7 +331,7 @@ func respond(ctx context.Context, w http.ResponseWriter, data chan HttpResponse)
 			if err != nil {
 				State.Logger.Error("[uapi.respond] Failed to unmarshal JSON response", zap.Error(err), zap.Int("size", len(msg.Data)))
 				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(State.Constants.InternalError))
+				w.Write([]byte(State.Constants.InternalServerError))
 				return
 			}
 
@@ -414,7 +437,7 @@ func ValidatorErrorResponse(compiled map[string]string, v validator.ValidationEr
 
 	return HttpResponse{
 		Status: http.StatusBadRequest,
-		Json:   State.UAPIErrorType.New(firstError, errors),
+		Json:   State.DefaultResponder.New(firstError, errors),
 	}
 }
 
@@ -435,7 +458,7 @@ func DefaultResponse(statusCode int) HttpResponse {
 	case http.StatusNotFound:
 		return HttpResponse{
 			Status: statusCode,
-			Data:   State.Constants.NotFound,
+			Data:   State.Constants.ResourceNotFound,
 		}
 	case http.StatusBadRequest:
 		return HttpResponse{
@@ -445,7 +468,7 @@ func DefaultResponse(statusCode int) HttpResponse {
 	case http.StatusInternalServerError:
 		return HttpResponse{
 			Status: statusCode,
-			Data:   State.Constants.InternalError,
+			Data:   State.Constants.InternalServerError,
 		}
 	case http.StatusMethodNotAllowed:
 		return HttpResponse{
@@ -460,7 +483,7 @@ func DefaultResponse(statusCode int) HttpResponse {
 
 	return HttpResponse{
 		Status: statusCode,
-		Data:   State.Constants.InternalError,
+		Data:   State.Constants.InternalServerError,
 	}
 }
 
@@ -476,7 +499,7 @@ func handle(r Route, w http.ResponseWriter, req *http.Request) {
 				State.Logger.Error("[uapi/handle] Request handler panic'd", zap.String("operationId", r.OpId), zap.String("method", req.Method), zap.String("endpointPattern", r.Pattern), zap.String("path", req.URL.Path), zap.Any("error", err))
 				resp <- HttpResponse{
 					Status: http.StatusInternalServerError,
-					Data:   State.Constants.InternalError,
+					Data:   State.Constants.InternalServerError,
 				}
 			}
 		}()
@@ -500,7 +523,7 @@ func handle(r Route, w http.ResponseWriter, req *http.Request) {
 			if err != nil {
 				resp <- HttpResponse{
 					Status: http.StatusInternalServerError,
-					Json:   State.UAPIErrorType.New(err.Error(), nil),
+					Json:   State.DefaultResponder.New(err.Error(), nil),
 				}
 				return
 			}
@@ -536,7 +559,7 @@ func marshalReq(r *http.Request, dst interface{}) (resp HttpResponse, ok bool) {
 		State.Logger.Error("[uapi/marshalReq] Failed to unmarshal JSON", zap.Error(err), zap.Int("size", len(bodyBytes)))
 		return HttpResponse{
 			Status: http.StatusBadRequest,
-			Json: State.UAPIErrorType.New("Invalid JSON", map[string]string{
+			Json: State.DefaultResponder.New("Invalid JSON", map[string]string{
 				"error": err.Error(),
 			}),
 		}, false
