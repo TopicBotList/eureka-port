@@ -20,7 +20,7 @@ type BaseState struct {
 	Context        context.Context
 	Pool           *pgxpool.Pool
 	Redis          *redis.Client
-	OnUpdate       func(u *dovetypes.PlatformUser) error
+	Middlewares    []func(p Platform, u *dovetypes.PlatformUser) (*dovetypes.PlatformUser, error)
 	UserExpiryTime time.Duration
 }
 
@@ -105,18 +105,21 @@ func GetUser(ctx context.Context, id string, platform Platform) (*dovetypes.Plat
 			u.DisplayName = u.Username
 		}
 
+		var err error
+
+		for i, middleware := range state.Middlewares {
+			u, err = middleware(platform, u)
+
+			if err != nil {
+				return nil, fmt.Errorf("middleware %d failed: %s", i, err)
+			}
+		}
+
 		// Update cache
-		_, err := state.Pool.Exec(state.Context, "INSERT INTO "+tableName+" (id, username, display_name, avatar, bot) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (id) DO UPDATE SET username = $2, display_name = $3, avatar = $4, bot = $5, last_updated = NOW()", u.ID, u.Username, u.DisplayName, u.Avatar, u.Bot)
+		_, err = state.Pool.Exec(state.Context, "INSERT INTO "+tableName+" (id, username, display_name, avatar, bot) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (id) DO UPDATE SET username = $2, display_name = $3, avatar = $4, bot = $5, last_updated = NOW()", u.ID, u.Username, u.DisplayName, u.Avatar, u.Bot)
 
 		if err != nil {
 			return nil, fmt.Errorf("failed to update internal user cache: %s", err)
-		}
-
-		if u.Bot && state.OnUpdate != nil {
-			err := state.OnUpdate(u)
-			if err != nil {
-				return nil, fmt.Errorf("updateCache failed: %s", err)
-			}
 		}
 
 		bytes, err := json.Marshal(u)

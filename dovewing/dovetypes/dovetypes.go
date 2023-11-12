@@ -16,5 +16,6 @@ type PlatformUser struct {
 	Avatar      string         `json:"avatar" description:"The users resolved avatar URL for the platform (not just hash)"`
 	Bot         bool           `json:"bot" description:"Whether the user is a bot or not"`
 	Status      PlatformStatus `json:"status" description:"The users current status"`
+	Flags       []string       `json:"flags" description:"The users flags. Note that dovewing has its own list of flags"`
 	ExtraData   map[string]any `json:"extra_data" description:"Platform specific extra data"`
 }

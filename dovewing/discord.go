@@ -9,6 +9,25 @@ import (
 	"github.com/infinitybotlist/eureka/dovewing/dovetypes"
 )
 
+var supportedBotFlags = map[string]int64{
+	"BOT_HTTP_INTERACTIONS": 1 << 19, // BOT_HTTP_INTERACTIONS
+	"VERIFIED_BOT":          1 << 16, // VERIFIED_BOT
+}
+
+func flagsToArray(u *discordgo.User) []string {
+	var arr = []string{}
+
+	if u.Bot {
+		for flag, val := range supportedBotFlags {
+			if int64(u.PublicFlags)&val == val {
+				arr = append(arr, flag)
+			}
+		}
+	}
+
+	return arr
+}
+
 func discordPlatformStatus(status discordgo.Status) dovetypes.PlatformStatus {
 	switch status {
 	case discordgo.StatusOnline:
@@ -99,6 +118,7 @@ func (d *DiscordState) PlatformSpecificCache(ctx context.Context, id string) (*d
 				Avatar:      member.User.AvatarURL(""),
 				DisplayName: member.User.GlobalName,
 				Bot:         member.User.Bot,
+				Flags:       flagsToArray(member.User),
 				ExtraData: map[string]any{
 					"nickname":        member.Nick,
 					"mutual_guild":    d.config.PreferredGuild,
@@ -133,6 +153,7 @@ func (d *DiscordState) PlatformSpecificCache(ctx context.Context, id string) (*d
 				Avatar:      member.User.AvatarURL(""),
 				DisplayName: member.User.GlobalName,
 				Bot:         member.User.Bot,
+				Flags:       flagsToArray(member.User),
 				ExtraData: map[string]any{
 					"nickname":        member.Nick,
 					"mutual_guild":    guild.ID,
@@ -162,5 +183,6 @@ func (d *DiscordState) GetUser(ctx context.Context, id string) (*dovetypes.Platf
 		DisplayName: user.GlobalName,
 		Bot:         user.Bot,
 		Status:      dovetypes.PlatformStatusOffline,
+		Flags:       flagsToArray(user),
 	}, nil
 }
