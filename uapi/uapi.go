@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	docs "github.com/infinitybotlist/eureka/doclib"
-	"github.com/infinitybotlist/eureka/hotcache"
 	"go.uber.org/zap"
 
 	"github.com/go-chi/chi/v5"
@@ -59,9 +58,6 @@ type UAPIState struct {
 	Authorize           func(r Route, req *http.Request) (AuthData, HttpResponse, bool)
 	AuthTypeMap         map[string]string // E.g. bot => Bot, user => User etc.
 	RouteDataMiddleware func(rd *RouteData, req *http.Request) (*RouteData, error)
-
-	// Used for caching
-	HotCache hotcache.HotCache[any]
 
 	// Used in cache algo
 	Context context.Context
