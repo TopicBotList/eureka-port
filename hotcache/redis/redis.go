@@ -15,7 +15,7 @@ type RedisHotCache[T any] struct {
 	Prefix string
 }
 
-func (r *RedisHotCache[T]) Get(ctx context.Context, key string) (*T, error) {
+func (r RedisHotCache[T]) Get(ctx context.Context, key string) (*T, error) {
 	bytes, err := r.Redis.Get(ctx, r.Prefix+key).Bytes()
 
 	if errors.Is(err, redis.Nil) {
