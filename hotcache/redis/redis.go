@@ -37,11 +37,11 @@ func (r *RedisHotCache[T]) Get(ctx context.Context, key string) (*T, error) {
 	return &val, nil
 }
 
-func (r *RedisHotCache[T]) Delete(ctx context.Context, key string) error {
+func (r RedisHotCache[T]) Delete(ctx context.Context, key string) error {
 	return r.Redis.Del(ctx, r.Prefix+key).Err()
 }
 
-func (r *RedisHotCache[T]) Set(ctx context.Context, key string, value *T, expiry time.Duration) error {
+func (r RedisHotCache[T]) Set(ctx context.Context, key string, value *T, expiry time.Duration) error {
 	bytes, err := json.Marshal(value)
 
 	if err != nil {
@@ -51,7 +51,7 @@ func (r *RedisHotCache[T]) Set(ctx context.Context, key string, value *T, expiry
 	return r.Redis.Set(ctx, r.Prefix+key, bytes, expiry).Err()
 }
 
-func (r *RedisHotCache[T]) Increment(ctx context.Context, key string, value int64) error {
+func (r RedisHotCache[T]) Increment(ctx context.Context, key string, value int64) error {
 	return r.Redis.IncrBy(ctx, r.Prefix+key, value).Err()
 }
 
@@ -59,7 +59,7 @@ func (r *RedisHotCache[T]) IncrementOne(ctx context.Context, key string) error {
 	return r.Redis.Incr(ctx, r.Prefix+key).Err()
 }
 
-func (r *RedisHotCache[T]) Exists(ctx context.Context, key string) (bool, error) {
+func (r RedisHotCache[T]) Exists(ctx context.Context, key string) (bool, error) {
 	b, err := r.Redis.Exists(ctx, r.Prefix+key).Result()
 
 	if err != nil {
@@ -69,6 +69,6 @@ func (r *RedisHotCache[T]) Exists(ctx context.Context, key string) (bool, error)
 	return b > 0, nil
 }
 
-func (r *RedisHotCache[T]) Expiry(ctx context.Context, key string) (time.Duration, error) {
+func (r RedisHotCache[T]) Expiry(ctx context.Context, key string) (time.Duration, error) {
 	return r.Redis.TTL(ctx, r.Prefix+key).Result()
 }
