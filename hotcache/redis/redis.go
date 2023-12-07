@@ -55,7 +55,7 @@ func (r RedisHotCache[T]) Increment(ctx context.Context, key string, value int64
 	return r.Redis.IncrBy(ctx, r.Prefix+key, value).Err()
 }
 
-func (r *RedisHotCache[T]) IncrementOne(ctx context.Context, key string) error {
+func (r RedisHotCache[T]) IncrementOne(ctx context.Context, key string) error {
 	return r.Redis.Incr(ctx, r.Prefix+key).Err()
 }
 
