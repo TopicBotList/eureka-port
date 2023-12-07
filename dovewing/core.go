@@ -2,26 +2,25 @@ package dovewing
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/infinitybotlist/eureka/dovewing/dovetypes"
+	"github.com/infinitybotlist/eureka/dovewing/hotcache"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"golang.org/x/exp/slices"
 )
 
 type BaseState struct {
-	Logger         *zap.Logger
-	Context        context.Context
-	Pool           *pgxpool.Pool
-	Redis          *redis.Client
-	Middlewares    []func(p Platform, u *dovetypes.PlatformUser) (*dovetypes.PlatformUser, error)
-	UserExpiryTime time.Duration
+	Logger            *zap.Logger
+	Context           context.Context
+	Pool              *pgxpool.Pool
+	PlatformUserCache hotcache.HotCache[dovetypes.PlatformUser]
+	Middlewares       []func(p Platform, u *dovetypes.PlatformUser) (*dovetypes.PlatformUser, error)
+	UserExpiryTime    time.Duration
 }
 
 type Platform interface {
@@ -122,11 +121,7 @@ func GetUser(ctx context.Context, id string, platform Platform) (*dovetypes.Plat
 			return nil, fmt.Errorf("failed to update internal user cache: %s", err)
 		}
 
-		bytes, err := json.Marshal(u)
-
-		if err == nil {
-			state.Redis.Set(state.Context, "uobj__"+platformName+":"+id, bytes, state.UserExpiryTime)
-		}
+		state.PlatformUserCache.Set(state.Context, platformName+":"+id, u, state.UserExpiryTime)
 
 		return u, nil
 	}
@@ -143,20 +138,17 @@ func GetUser(ctx context.Context, id string, platform Platform) (*dovetypes.Plat
 	}
 
 	// Check if in redis cache
-	userBytes, err := state.Redis.Get(ctx, "uobj__"+platformName+":"+id).Result()
+	user, err := state.PlatformUserCache.Get(ctx, platformName+":"+id)
+
+	if err != nil && err != hotcache.ErrHotCacheDataNotFound {
+		return nil, fmt.Errorf("failed to get user from redis cache: %s", err)
+	}
 
 	if err == nil {
-		// Try to unmarshal
-		var user dovetypes.PlatformUser
-
-		err = json.Unmarshal([]byte(userBytes), &user)
-
-		if err == nil {
-			user.ExtraData = map[string]any{
-				"cache": "redis",
-			}
-			return &user, nil
+		user.ExtraData = map[string]any{
+			"cache": "redis",
 		}
+		return user, nil
 	}
 
 	// Check if in internal user cache, this allows fetches of users not in cache to be done in the background
@@ -231,7 +223,7 @@ func GetUser(ctx context.Context, id string, platform Platform) (*dovetypes.Plat
 	}
 
 	// Get from platform
-	user, err := platform.GetUser(ctx, id)
+	user, err = platform.GetUser(ctx, id)
 
 	if err != nil {
 		return nil, errors.New("failed to get user from platform: " + err.Error())
@@ -312,7 +304,7 @@ func ClearUser(ctx context.Context, id string, platform Platform, req ClearUserR
 	// Check redis
 	if len(req.ClearFrom) == 0 || slices.Contains(req.ClearFrom, ClearFromRedis) {
 		// Delete from redis
-		_, err := state.Redis.Del(ctx, "uobj__"+platformName+":"+id).Result()
+		err := state.PlatformUserCache.Delete(ctx, platformName+":"+id)
 
 		if err != nil {
 			return nil, err
