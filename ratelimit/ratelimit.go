@@ -1,4 +1,4 @@
-// Ratelimits are only used for login and other endpoints that can be heavily abused
+// Ratelimit implementation
 package ratelimit
 
 import (
@@ -9,8 +9,20 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/infinitybotlist/eureka/uapi"
+	"github.com/infinitybotlist/eureka/hotcache"
 )
+
+var zero = 0
+
+type RLState struct {
+	HotCache hotcache.HotCache[int]
+}
+
+var State *RLState
+
+func SetupState(s *RLState) {
+	State = s
+}
 
 type Ratelimit struct {
 	// Expiry is the time for the ratelimit to expire
@@ -67,15 +79,15 @@ func (rl Ratelimit) Limit(ctx context.Context, r *http.Request) (Limit, error) {
 	identifier := fmt.Sprintf("%x", sha256.Sum256([]byte(rl.Identifier(r))))
 
 	// Check if rate even exists
-	exists, err := uapi.State.Redis.Exists(ctx, rl.Bucket+"-"+identifier).Result()
+	exists, err := State.HotCache.Exists(ctx, rl.Bucket+"-"+identifier)
 
 	if err != nil {
 		return Limit{GotIdentifier: identifier}, err
 	}
 
 	// If the rate doesn't exist, set it
-	if exists == 0 {
-		_, err = uapi.State.Redis.Set(ctx, rl.Bucket+"-"+identifier, 0, rl.Expiry).Result()
+	if !exists {
+		err = State.HotCache.Set(ctx, rl.Bucket+"-"+identifier, &zero, rl.Expiry)
 
 		if err != nil {
 			return Limit{GotIdentifier: identifier}, err
@@ -83,24 +95,24 @@ func (rl Ratelimit) Limit(ctx context.Context, r *http.Request) (Limit, error) {
 	}
 
 	// Get the current rate from redis
-	currentRate, err := uapi.State.Redis.Get(ctx, rl.Bucket+"-"+identifier).Int()
+	currentRate, err := State.HotCache.Get(ctx, rl.Bucket+"-"+identifier)
 
 	if err != nil {
 		return Limit{GotIdentifier: identifier}, err
 	}
 
 	// Check if the rate has been exceeded
-	exceeded := currentRate > rl.MaxRequests
+	exceeded := *currentRate > rl.MaxRequests
 
 	// Increment the rate
-	_, err = uapi.State.Redis.Incr(ctx, rl.Bucket+"-"+identifier).Result()
+	err = State.HotCache.IncrementOne(ctx, rl.Bucket+"-"+identifier)
 
 	if err != nil {
 		return Limit{GotIdentifier: identifier}, err
 	}
 
 	// Get the time when the rate will reset
-	resetTime, err := uapi.State.Redis.TTL(ctx, rl.Bucket+"-"+identifier).Result()
+	resetTime, err := State.HotCache.Expiry(ctx, rl.Bucket+"-"+identifier)
 
 	if err != nil {
 		return Limit{GotIdentifier: identifier}, err
@@ -109,7 +121,7 @@ func (rl Ratelimit) Limit(ctx context.Context, r *http.Request) (Limit, error) {
 	return Limit{
 		GotIdentifier: identifier,
 		Exceeded:      exceeded,
-		Made:          currentRate,
+		Made:          *currentRate,
 		TimeToReset:   resetTime,
 		MaxRequests:   rl.MaxRequests,
 		Bucket:        rl.Bucket,

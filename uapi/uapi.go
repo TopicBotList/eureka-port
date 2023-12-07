@@ -7,10 +7,9 @@ import (
 	"net/http"
 	"reflect"
 	"strings"
-	"time"
 
 	docs "github.com/infinitybotlist/eureka/doclib"
-	"github.com/redis/go-redis/v9"
+	"github.com/infinitybotlist/eureka/hotcache"
 	"go.uber.org/zap"
 
 	"github.com/go-chi/chi/v5"
@@ -62,9 +61,7 @@ type UAPIState struct {
 	RouteDataMiddleware func(rd *RouteData, req *http.Request) (*RouteData, error)
 
 	// Used for caching
-	//
-	// TODO: Make this a interface
-	Redis *redis.Client
+	HotCache hotcache.HotCache[any]
 
 	// Used in cache algo
 	Context context.Context
@@ -347,16 +344,6 @@ func respond(ctx context.Context, w http.ResponseWriter, data chan HttpResponse)
 			}
 
 			w.Write(bytes)
-
-			if msg.CacheKey != "" && msg.CacheTime.Seconds() > 0 {
-				go func() {
-					err := State.Redis.Set(State.Context, msg.CacheKey, bytes, msg.CacheTime).Err()
-
-					if err != nil {
-						State.Logger.Error("[uapi.respond] Failed to cache JSON response", zap.Error(err), zap.String("key", msg.CacheKey), zap.Int("size", len(bytes)))
-					}
-				}()
-			}
 		}
 
 		if msg.Status == 0 {
@@ -385,10 +372,6 @@ type HttpResponse struct {
 	Headers map[string]string
 	// Status is the HTTP status code to send
 	Status int
-	// Cache the JSON to redis
-	CacheKey string
-	// Duration to cache the JSON for
-	CacheTime time.Duration
 	// Redirect to a URL
 	Redirect string
 }

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/infinitybotlist/eureka/dovewing/dovetypes"
-	"github.com/infinitybotlist/eureka/dovewing/hotcache"
+	"github.com/infinitybotlist/eureka/hotcache"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
