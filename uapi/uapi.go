@@ -153,6 +153,7 @@ type Route struct {
 	Setup        func()
 	Docs         func() *docs.Doc
 	Auth         []AuthType
+	ExtData      map[string]any
 	AuthOptional bool
 
 	// Disables sanity check that ensures all variables are followed by a /
