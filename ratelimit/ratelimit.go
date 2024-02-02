@@ -56,7 +56,7 @@ type Limit struct {
 func (l Limit) Headers() map[string]string {
 	if l.Exceeded {
 		return map[string]string{
-			"Retry-After": l.TimeToReset.String(),
+			"Retry-After": strconv.FormatFloat(l.TimeToReset.Seconds(), 'f', -1, 64),
 			"Req-Made":    strconv.Itoa(l.Made),
 			"Req-Limit":   strconv.Itoa(l.MaxRequests),
 			"Bucket":      l.Bucket,
