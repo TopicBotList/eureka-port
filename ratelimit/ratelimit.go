@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+	"errors"
 
 	"github.com/infinitybotlist/eureka/hotcache"
 )
@@ -97,7 +98,7 @@ func (rl Ratelimit) Limit(ctx context.Context, r *http.Request) (Limit, error) {
 	// Get the current rate from redis
 	currentRate, err := State.HotCache.Get(ctx, rl.Bucket+"-"+identifier)
 
-	if errors.Is(currentRate, hotcache.ErrHotCacheDataNotFound) {
+	if errors.Is(err, hotcache.ErrHotCacheDataNotFound) {
 		rateDefault := 0
 		currentRate = &rateDefault
 	} else if err != nil {
