@@ -97,7 +97,10 @@ func (rl Ratelimit) Limit(ctx context.Context, r *http.Request) (Limit, error) {
 	// Get the current rate from redis
 	currentRate, err := State.HotCache.Get(ctx, rl.Bucket+"-"+identifier)
 
-	if err != nil {
+	if errors.Is(currentRate, hotcache.ErrHotCacheDataNotFound) {
+		rateDefault := 0
+		currentRate = &rateDefault
+	} else if err != nil {
 		return Limit{GotIdentifier: identifier}, err
 	}
 
