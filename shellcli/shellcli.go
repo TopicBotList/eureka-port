@@ -118,6 +118,7 @@ func (a *ShellCli[T]) Exec(cmd []string) error {
 		if len(fields) == 1 {
 			if len(cmdData.Args) <= i {
 				fmt.Println("WARNING: extra argument: ", fields[0])
+				continue
 			}
 
 			argMap[cmdData.Args[i][0]] = fields[0]
