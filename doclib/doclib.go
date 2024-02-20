@@ -61,7 +61,7 @@ var api = Openapi{
 	OpenAPI: "3.1.0",
 	Servers: []Server{
 		{
-			Description: "Popplio (v6)",
+			Description: "tbl api",
 			Variables:   map[string]interface{}{},
 		},
 	},
