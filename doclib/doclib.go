@@ -13,7 +13,7 @@ import (
 
 type SetupData struct {
 	URL             string
-	ErrorStruct     any
+	ErrorStruct     interface{}
 	Info            Info
 	errorStructName string
 }
@@ -29,7 +29,7 @@ func Setup() {
 
 	var err error
 
-	badRequestSchema, err = openapi3gen.NewSchemaRefForValue(DocsSetupData.ErrorStruct, nil, SchemaInject(DocsSetupData.ErrorStruct))
+	badRequestSchema, err := openapi3gen.NewSchemaRefForValue(DocsSetupData.ErrorStruct, nil, SchemaInject(DocsSetupData.ErrorStruct))
 
 	if err != nil {
 		panic(err)
@@ -41,13 +41,9 @@ func Setup() {
 
 	DocsSetupData.errorStructName = errorSchemaName
 
-	IdSchema, err = openapi3gen.NewSchemaRefForValue("1234567890", nil)
-
 	if err != nil {
 		panic(err)
 	}
-
-	BoolSchema, err = openapi3gen.NewSchemaRefForValue(true, nil)
 
 	if err != nil {
 		panic(err)
@@ -66,17 +62,15 @@ var api = Openapi{
 	Servers: []Server{
 		{
 			Description: "Popplio (v6)",
-			Variables:   map[string]any{},
+			Variables:   map[string]interface{}{},
 		},
 	},
 	Components: Component{
-		Schemas:       make(map[string]any),
+		Schemas:       make(map[string]interface{}),
 		Security:      make(map[string]Security),
 		RequestBodies: make(map[string]ReqBody),
 	},
 }
-
-var badRequestSchema *openapi3.SchemaRef
 
 var IdSchema *openapi3.SchemaRef
 var BoolSchema *openapi3.SchemaRef
@@ -97,7 +91,7 @@ func AddSecuritySchema(id, header, description string) {
 	}
 }
 
-func SchemaInject(s any) openapi3gen.Option {
+func SchemaInject(s interface{}) openapi3gen.Option {
 	return openapi3gen.SchemaCustomizer(func(name string, ft reflect.Type, tag reflect.StructTag, schema *openapi3.Schema) error {
 		if tag.Get("description") != "" {
 			schema.Description = tag.Get("description")
@@ -140,7 +134,7 @@ func SchemaInject(s any) openapi3gen.Option {
 			// Split by comma
 			enumVals := strings.Split(tag.Get("enum"), ",")
 
-			schema.Enum = []any{}
+			schema.Enum = []interface{}{}
 
 			for _, val := range enumVals {
 				schema.Enum = append(schema.Enum, val)
@@ -159,7 +153,7 @@ func SchemaInject(s any) openapi3gen.Option {
 				case "oneof":
 					enumVals := strings.Split(val, "=")[1]
 
-					var enum []any
+					var enum []interface{}
 
 					for _, val := range strings.Split(enumVals, " ") {
 						enum = append(enum, val)
