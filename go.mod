@@ -1,4 +1,4 @@
-module github.com/infinitybotlist/eureka
+module github.com/topicbotlist/eureka-port
 
 go 1.19
 

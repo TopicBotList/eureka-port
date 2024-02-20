@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"strings"
 
-	docs "github.com/infinitybotlist/eureka/doclib"
+	docs "github.com/topicbotlist/eureka-port/doclib"
 	"go.uber.org/zap"
 
 	"github.com/go-chi/chi/v5"
